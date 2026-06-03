@@ -15,6 +15,7 @@ export interface Request {
   remarks: string | null;
   requested_date: string;
   completed_date: string | null;
+  reminded_at: string | null;
   chat_id: number;
   created_at: string;
 }
@@ -74,6 +75,41 @@ export async function getRecentRequestors(): Promise<string[]> {
     .limit(25);
   const names = (data ?? []).map((r) => r.requestor as string);
   return [...new Set(names)].slice(0, 5);
+}
+
+// Returns open requests whose SLA has been breached and haven't been reminded recently
+export async function getOverdueRequests(): Promise<Request[]> {
+  const now = new Date();
+
+  // Thresholds in hours per priority
+  const thresholds: Record<string, number> = {
+    Urgent: 4,
+    High: 24,
+    Med: 120, // 5 days
+  };
+
+  const results: Request[] = [];
+
+  for (const [priority, hours] of Object.entries(thresholds)) {
+    const cutoff = new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from('requests')
+      .select('*')
+      .eq('priority', priority)
+      .not('status', 'in', '("Completed","Closed")')
+      .lt('created_at', cutoff)
+      .or(`reminded_at.is.null,reminded_at.lt.${cutoff}`);
+    if (data) results.push(...data);
+  }
+
+  return results;
+}
+
+export async function markReminded(rowId: number): Promise<void> {
+  await supabase
+    .from('requests')
+    .update({ reminded_at: new Date().toISOString() })
+    .eq('id', rowId);
 }
 
 export async function getState(chatId: number): Promise<string | null> {

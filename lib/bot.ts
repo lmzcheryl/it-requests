@@ -2,12 +2,15 @@ import { sendMessage, sendInlineKeyboard, answerCallback } from './telegram';
 import {
   appendRequest,
   clearState,
+  getOverdueRequests,
   getRecentRequestors,
   getRow,
   getPendingRequests,
   getState,
+  markReminded,
   setState,
   updateField,
+  Request,
 } from './supabase';
 
 // ── Types ──────────────────────────────────────────────────────
@@ -40,6 +43,7 @@ interface FlowState {
   step: 'ask_requestor' | 'post_log' | 'priority' | 'complexity' | 'status' | 'remarks';
   rowId?: number;
   requestText?: string;
+  priority?: string;
 }
 
 // ── Entry point ────────────────────────────────────────────────
@@ -55,6 +59,42 @@ export async function handleUpdate(update: {
   if (update.message) {
     await handleMessage(update.message);
   }
+}
+
+// ── Reminders ─────────────────────────────────────────────────
+
+const PRIORITY_LABEL: Record<string, string> = {
+  Urgent: 'Drop everything — fix now.',
+  High:   'Today or tomorrow.',
+  Med:    'Within the week.',
+  Low:    'Nice to have, no hard deadline.',
+};
+
+export async function checkReminders(): Promise<void> {
+  const overdue = await getOverdueRequests();
+  for (const req of overdue) {
+    const age = getAge(req.created_at);
+    const guide = PRIORITY_LABEL[req.priority!] || '';
+    await sendMessage(
+      req.chat_id,
+      `⏰ Reminder — #${req.id} is still open\n\n` +
+      `Requestor   ${req.requestor}\n` +
+      `Request     ${req.request_text}\n` +
+      `Priority    ${req.priority}\n` +
+      `Status      ${req.status}\n` +
+      `Age         ${age}\n\n` +
+      `${guide}\n\n` +
+      `/edit ${req.id} — update status`
+    );
+    await markReminded(req.id);
+  }
+}
+
+function getAge(createdAt: string): string {
+  const ms = Date.now() - new Date(createdAt).getTime();
+  const h = Math.floor(ms / 3600000);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
 }
 
 // ── Callback query handler (inline button taps) ────────────────
@@ -96,12 +136,17 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
 
   if (state.step === 'priority') {
     if (data !== 'Skip') await updateField(state.rowId!, 'priority', data);
-    await askComplexity(chatId, state.rowId!);
+    await askComplexity(chatId, state.rowId!, data !== 'Skip' ? data : undefined);
     return;
   }
 
   if (state.step === 'complexity') {
     if (data !== 'Skip') await updateField(state.rowId!, 'complexity', data);
+    // Show suggestion if we have both priority and complexity
+    if (state.priority && data !== 'Skip') {
+      const suggestion = getSuggestion(state.priority, data);
+      if (suggestion) await sendMessage(chatId, suggestion);
+    }
     await askStatus(chatId, state.rowId!);
     return;
   }
@@ -137,7 +182,6 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
   if (stateJson) {
     const state: FlowState = JSON.parse(stateJson);
 
-    // Only these two steps accept free-text input
     if (state.step === 'ask_requestor') {
       await logAndConfirm(chatId, text, state.requestText!);
       return;
@@ -151,8 +195,7 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
       return;
     }
 
-    // All other steps use inline buttons — ignore stray text
-    return;
+    return; // ignore stray text during other steps
   }
 
   const isForward =
@@ -237,6 +280,26 @@ async function logAndConfirm(chatId: number, requestor: string, requestText: str
 // ── Fill-flow steps ────────────────────────────────────────────
 
 async function startFillFlow(chatId: number, rowId: number): Promise<void> {
+  const row = await getRow(rowId);
+  if (!row) {
+    await sendMessage(chatId, `❌ Request #${rowId} not found.`);
+    return;
+  }
+
+  // Show summary first so the user knows what they're editing
+  await sendMessage(
+    chatId,
+    `📋 Request #${row.id}\n\n` +
+    `Requestor   ${row.requestor}\n` +
+    `Request     ${row.request_text}\n` +
+    `Requested   ${formatDate(row.requested_date)}\n` +
+    `Priority    ${row.priority    || '—'}\n` +
+    `Complexity  ${row.complexity  || '—'}\n` +
+    `Status      ${row.status}\n` +
+    `Remarks     ${row.remarks     || '—'}\n\n` +
+    `Let's fill in the details 👇`
+  );
+
   await askPriority(chatId, rowId);
 }
 
@@ -244,12 +307,12 @@ async function askPriority(chatId: number, rowId: number): Promise<void> {
   await sendInlineKeyboard(
     chatId,
     `Step 1 of 4 — Priority\nWhat's the priority for #${rowId}?`,
-    [['High', 'Med', 'Low', 'Skip']]
+    [['Urgent', 'High', 'Med', 'Low'], ['Skip']]
   );
   await setState(chatId, JSON.stringify({ step: 'priority', rowId }));
 }
 
-async function askComplexity(chatId: number, rowId: number): Promise<void> {
+async function askComplexity(chatId: number, rowId: number, priority?: string): Promise<void> {
   await sendInlineKeyboard(
     chatId,
     'Step 2 of 4 — Complexity\nComplexity?',
@@ -259,7 +322,7 @@ async function askComplexity(chatId: number, rowId: number): Promise<void> {
       ['Skip'],
     ]
   );
-  await setState(chatId, JSON.stringify({ step: 'complexity', rowId }));
+  await setState(chatId, JSON.stringify({ step: 'complexity', rowId, priority }));
 }
 
 async function askStatus(chatId: number, rowId: number): Promise<void> {
@@ -307,9 +370,45 @@ async function sendPending(chatId: number): Promise<void> {
   );
 }
 
+// ── Suggestion engine ──────────────────────────────────────────
+
+function getSuggestion(priority: string, complexity: string): string {
+  const p = priority;
+  const c = complexity.toLowerCase();
+  const isMinimal  = c.includes('minimal');
+  const isModerate = c.includes('moderate');
+  const isHeavy    = c.includes('heavy');
+
+  if (p === 'Urgent') {
+    if (isMinimal)  return '💡 Drop everything — aim to complete within 4 hours (quick fix).';
+    if (isModerate) return '💡 Drop everything — aim to wrap up by end of day (1-2 days of work).';
+    if (isHeavy)    return '💡 Drop everything — this needs immediate attention. It\'s heavy, so loop in help if needed.';
+    return '💡 Drop everything — long haul but urgent. Break it into milestones and start now.';
+  }
+  if (p === 'High') {
+    if (isMinimal)  return '💡 Today or tomorrow — it\'s a quick fix, no reason to delay.';
+    if (isModerate) return '💡 Today or tomorrow — block time for this, it\'ll take 1-2 days.';
+    if (isHeavy)    return '💡 Start today, target completion by end of week.';
+    return '💡 High priority but a long haul — start planning now and set a milestone for this week.';
+  }
+  if (p === 'Med') {
+    return '💡 Within the week — don\'t let it slip past Friday.';
+  }
+  if (p === 'Low') {
+    return '💡 Nice to have — pick it up when you have spare capacity.';
+  }
+  return '';
+}
+
 // ── Helpers ────────────────────────────────────────────────────
 
-function formatSummary(rowId: number, row: Awaited<ReturnType<typeof getRow>>): string {
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
+function formatSummary(rowId: number, row: Request | null): string {
   return (
     `✅ #${rowId} updated\n\n` +
     `Priority:   ${row?.priority   || '—'}\n` +

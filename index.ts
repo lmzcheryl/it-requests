@@ -1,5 +1,5 @@
 import http from 'http';
-import { handleUpdate } from './lib/bot';
+import { handleUpdate, checkReminders } from './lib/bot';
 import { setWebhook } from './lib/telegram';
 
 const PORT = process.env.PORT || 3000;
@@ -40,3 +40,8 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Bot server running on port ${PORT}`);
 });
+
+// Check for overdue requests every 30 minutes
+setInterval(() => {
+  checkReminders().catch((err) => console.error('[reminders]', err));
+}, 30 * 60 * 1000);
