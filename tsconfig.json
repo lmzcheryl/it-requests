@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "outDir": ".vercel/output"
   },
-  "include": ["api/**/*", "lib/**/*"]
+  "include": ["index.ts", "lib/**/*"]
 }
