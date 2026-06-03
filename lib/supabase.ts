@@ -122,6 +122,62 @@ export async function markReminded(rowId: number): Promise<void> {
     .eq('id', rowId);
 }
 
+// ── Signal Logs ────────────────────────────────────────────────
+
+export interface SignalLog {
+  id: number;
+  date_logged: string;
+  what_happened: string;
+  logged_by: string;
+  request_id: number | null;
+  signal_type: string | null;
+  impact: string | null;
+  temporary_fix: string | null;
+  root_cause_guess: string | null;
+  kaizen_ideas: string | null;
+  resolved: string | null;
+  chat_id: number;
+  created_at: string;
+}
+
+export async function appendSignalLog(
+  whatHappened: string,
+  loggedBy: string,
+  chatId: number,
+  requestId?: number
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('signal_logs')
+    .insert({ what_happened: whatHappened, logged_by: loggedBy, chat_id: chatId, request_id: requestId ?? null })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+export async function updateSignalField(
+  signalId: number,
+  column: string,
+  value: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('signal_logs')
+    .update({ [column]: value })
+    .eq('id', signalId);
+  if (error) throw error;
+}
+
+export async function getSignalRow(signalId: number): Promise<SignalLog | null> {
+  const { data } = await supabase
+    .from('signal_logs')
+    .select('*')
+    .eq('id', signalId)
+    .single();
+  return data ?? null;
+}
+
+// ── State ──────────────────────────────────────────────────────
+
 export async function getState(chatId: number): Promise<string | null> {
   const { data } = await supabase
     .from('bot_state')
