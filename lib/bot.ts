@@ -131,7 +131,7 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
 
   if (text === '/pending') { await sendPending(chatId); return; }
 
-  const editMatch = text.match(/^\/edit\s+(\d+)/);
+  const editMatch = text.match(/^\/edit\D*(\d+)/);
   if (editMatch) { await startFillFlow(chatId, parseInt(editMatch[1])); return; }
 
   if (stateJson) {
@@ -168,7 +168,7 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
     chatId,
     'Forward me a message to log a request.\n\n' +
     '/pending — open requests\n' +
-    '/edit [id] — update a row'
+    '/edit 23 — update a row'
   );
 }
 
