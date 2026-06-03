@@ -254,7 +254,8 @@ async function askComplexity(chatId: number, rowId: number): Promise<void> {
     chatId,
     'Step 2 of 4 — Complexity\nComplexity?',
     [
-      ['S — small', 'M — medium', 'L — large'],
+      ['Minimal (half a day)', 'Moderate (1-2 days)'],
+      ['Heavy (More than 2 days)', 'Long term (1 Month)'],
       ['Skip'],
     ]
   );
