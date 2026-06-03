@@ -367,7 +367,7 @@ async function askStatus(chatId: number, rowId: number, loggedBy?: string): Prom
   const row = await getRow(rowId);
   await sendInlineKeyboard(chatId,
     `${b('Step 3 of 4 — Status')}\nStatus? (currently ${h(row?.status || 'New')})`,
-    [['New', 'In Progress', 'Blocked'], ['Done', 'Keep as New']]
+    [['New', 'In Progress', 'On Hold'], ['Stuck', 'Completed', 'Closed']]
   );
   await setState(chatId, JSON.stringify({ step: 'status', rowId, loggedBy }));
 }
