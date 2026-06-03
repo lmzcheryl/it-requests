@@ -210,6 +210,20 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
   const editMatch = text.match(/^\/edit\D*(\d+)/);
   if (editMatch) { await startFillFlow(chatId, parseInt(editMatch[1])); return; }
 
+  // Forwards always take priority — clear any stuck flow and log the new request
+  const isForward =
+    msg.forward_origin ||
+    msg.forward_from ||
+    msg.forward_sender_name ||
+    msg.forward_from_chat ||
+    msg.forward_date;
+
+  if (isForward) {
+    await clearState(chatId);
+    await handleForward(msg, chatId);
+    return;
+  }
+
   if (stateJson) {
     const state: FlowState = JSON.parse(stateJson);
 
@@ -228,15 +242,6 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
 
     return;
   }
-
-  const isForward =
-    msg.forward_origin ||
-    msg.forward_from ||
-    msg.forward_sender_name ||
-    msg.forward_from_chat ||
-    msg.forward_date;
-
-  if (isForward) { await handleForward(msg, chatId); return; }
 
   await sendMessage(
     chatId,
