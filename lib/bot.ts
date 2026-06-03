@@ -2,6 +2,7 @@ import { sendMessage, sendInlineKeyboard, answerCallback } from './telegram';
 import {
   appendRequest,
   clearState,
+  getAllRequests,
   getOverdueRequests,
   getRecentRequestors,
   getRow,
@@ -126,6 +127,14 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   const chatId = cq.message?.chat.id;
   if (!chatId || !cq.data) return;
 
+  // Global action — Edit button from /pending list
+  if (cq.data.startsWith('edit:')) {
+    const rowId = parseInt(cq.data.split(':')[1]);
+    await clearState(chatId);
+    await startFillFlow(chatId, rowId);
+    return;
+  }
+
   const stateJson = await getState(chatId);
   if (!stateJson) return;
 
@@ -195,7 +204,8 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
   const text = (msg.text || '').trim();
   const stateJson = await getState(chatId);
 
-  if (text === '/pending') { await sendPending(chatId); return; }
+  if (text === '/pending') { await sendPending(chatId, false); return; }
+  if (text === '/all')     { await sendPending(chatId, true);  return; }
 
   const editMatch = text.match(/^\/edit\D*(\d+)/);
   if (editMatch) { await startFillFlow(chatId, parseInt(editMatch[1])); return; }
@@ -232,6 +242,7 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
     chatId,
     'Forward me a message to log a request.\n\n' +
     '/pending — open requests\n' +
+    '/all — all requests incl. Done\n' +
     '/edit 23 — update a row'
   );
 }
@@ -369,26 +380,41 @@ async function askRemarks(chatId: number, rowId: number): Promise<void> {
 
 // ── /pending ───────────────────────────────────────────────────
 
-async function sendPending(chatId: number): Promise<void> {
-  const rows = await getPendingRequests();
+async function sendPending(chatId: number, includeAll: boolean): Promise<void> {
+  const rows = includeAll ? await getAllRequests() : await getPendingRequests();
+  const label = includeAll ? 'All requests' : 'Open requests';
 
   if (!rows.length) {
-    await sendMessage(chatId, 'No open requests right now 🎉');
+    await sendMessage(chatId, 'No requests found 🎉');
     return;
   }
 
-  const lines = rows.slice(0, 5).map((r) =>
-    `${b('#' + r.id)} · ${h(r.requestor)}\n` +
-    `${excerpt(r.request_text, 70)}\n` +
-    `${h(r.priority || '—')} · ${h(r.status)}`
+  const shown = rows.slice(0, 8);
+
+  const lines = shown.map((r) =>
+    `${b('#' + r.id)}  ${excerpt(r.request_text, 60)}\n` +
+    `${h(r.requestor)} · ${h(r.priority || '—')} · ${h(r.status)} · ${shortDate(r.requested_date)}`
   );
 
-  await sendMessage(
-    chatId,
-    `${b('Open requests (' + rows.length + ')')}\n\n` +
-    lines.join('\n\n') +
-    '\n\n/edit [id] to update a row'
-  );
+  const editButtons = shown.map((r) => [{ text: `✏️ #${r.id}`, callback_data: `edit:${r.id}` }]);
+
+  await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text:
+        `${b(label + ' (' + rows.length + ')')}\n\n` +
+        lines.join('\n\n') +
+        (includeAll ? '' : '\n\n/all — see all including Done'),
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: editButtons },
+    }),
+  });
+}
+
+function shortDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
 // ── Suggestion engine ──────────────────────────────────────────

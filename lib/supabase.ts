@@ -60,7 +60,17 @@ export async function getPendingRequests(): Promise<Request[]> {
   const { data, error } = await supabase
     .from('requests')
     .select('*')
-    .not('status', 'in', '("Completed","Closed")')
+    .not('status', 'in', '("Completed","Closed","Done")')
+    .order('created_at', { ascending: false })
+    .limit(10);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getAllRequests(): Promise<Request[]> {
+  const { data, error } = await supabase
+    .from('requests')
+    .select('*')
     .order('created_at', { ascending: false })
     .limit(10);
   if (error) throw error;
