@@ -235,7 +235,7 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
   const chatId = msg.chat.id;
   const text = (msg.text || '').trim();
   const stateJson = await getState(chatId);
-  const loggedBy = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(' ') || 'Unknown';
+  const loggedBy = process.env.LOGGED_BY_NAME || 'Cheryl';
 
   if (text === '/pending') { await sendPending(chatId, false); return; }
   if (text === '/all')     { await sendPending(chatId, true);  return; }
