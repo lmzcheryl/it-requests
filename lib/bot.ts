@@ -46,6 +46,38 @@ interface FlowState {
   priority?: string;
 }
 
+// ── Text helpers ───────────────────────────────────────────────
+
+function h(text: string): string {
+  // Escape user content for HTML parse mode
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function b(text: string): string {
+  return `<b>${text}</b>`;
+}
+
+// Take first non-empty line and cap at maxLen
+function excerpt(text: string, maxLen = 80): string {
+  const line = text.split('\n').map(l => l.trim()).find(l => l.length > 0) || text;
+  return h(line.length > maxLen ? line.slice(0, maxLen - 1) + '…' : line);
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
+function getAge(createdAt: string): string {
+  const ms = Date.now() - new Date(createdAt).getTime();
+  const h = Math.floor(ms / 3600000);
+  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
+}
+
 // ── Entry point ────────────────────────────────────────────────
 
 export async function handleUpdate(update: {
@@ -63,7 +95,7 @@ export async function handleUpdate(update: {
 
 // ── Reminders ─────────────────────────────────────────────────
 
-const PRIORITY_LABEL: Record<string, string> = {
+const PRIORITY_GUIDE: Record<string, string> = {
   Urgent: 'Drop everything — fix now.',
   High:   'Today or tomorrow.',
   Med:    'Within the week.',
@@ -73,31 +105,21 @@ const PRIORITY_LABEL: Record<string, string> = {
 export async function checkReminders(): Promise<void> {
   const overdue = await getOverdueRequests();
   for (const req of overdue) {
-    const age = getAge(req.created_at);
-    const guide = PRIORITY_LABEL[req.priority!] || '';
+    const guide = PRIORITY_GUIDE[req.priority!] || '';
     await sendMessage(
       req.chat_id,
-      `⏰ Reminder — #${req.id} is still open\n\n` +
-      `Requestor   ${req.requestor}\n` +
-      `Request     ${req.request_text}\n` +
-      `Priority    ${req.priority}\n` +
-      `Status      ${req.status}\n` +
-      `Age         ${age}\n\n` +
-      `${guide}\n\n` +
+      `⏰ ${b('Reminder')} — ${b('#' + req.id)} is still open\n\n` +
+      `👤 ${h(req.requestor)}\n` +
+      `📝 ${excerpt(req.request_text)}\n` +
+      `🔺 ${h(req.priority || '—')} · ${h(req.status)} · ${getAge(req.created_at)} old\n\n` +
+      `<i>${h(guide)}</i>\n\n` +
       `/edit ${req.id} — update status`
     );
     await markReminded(req.id);
   }
 }
 
-function getAge(createdAt: string): string {
-  const ms = Date.now() - new Date(createdAt).getTime();
-  const h = Math.floor(ms / 3600000);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
-}
-
-// ── Callback query handler (inline button taps) ────────────────
+// ── Callback query handler ─────────────────────────────────────
 
 async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   await answerCallback(cq.id);
@@ -126,7 +148,7 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
       await clearState(chatId);
       await sendMessage(
         chatId,
-        `Got it. Row #${state.rowId} is saved.\n\n` +
+        `Got it. ${b('#' + state.rowId)} is saved.\n\n` +
         `/pending — see all open requests\n` +
         `/edit ${state.rowId} — come back to this one`
       );
@@ -142,7 +164,6 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
 
   if (state.step === 'complexity') {
     if (data !== 'Skip') await updateField(state.rowId!, 'complexity', data);
-    // Show suggestion if we have both priority and complexity
     if (state.priority && data !== 'Skip') {
       const suggestion = getSuggestion(state.priority, data);
       if (suggestion) await sendMessage(chatId, suggestion);
@@ -162,12 +183,12 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   if (state.step === 'remarks') {
     await clearState(chatId);
     const row = await getRow(state.rowId!);
-    await sendMessage(chatId, formatSummary(state.rowId!, row));
+    await sendMessage(chatId, formatUpdatedSummary(state.rowId!, row));
     return;
   }
 }
 
-// ── Message handler (text input + commands + forwards) ─────────
+// ── Message handler ────────────────────────────────────────────
 
 async function handleMessage(msg: TelegramMessage): Promise<void> {
   const chatId = msg.chat.id;
@@ -191,11 +212,11 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
       await updateField(state.rowId!, 'remarks', text);
       await clearState(chatId);
       const row = await getRow(state.rowId!);
-      await sendMessage(chatId, formatSummary(state.rowId!, row));
+      await sendMessage(chatId, formatUpdatedSummary(state.rowId!, row));
       return;
     }
 
-    return; // ignore stray text during other steps
+    return;
   }
 
   const isForward =
@@ -267,11 +288,11 @@ async function logAndConfirm(chatId: number, requestor: string, requestText: str
 
   await sendInlineKeyboard(
     chatId,
-    `✅ Logged as #${id}\n\n` +
-    `Requestor   ${requestor}\n` +
-    `Request     ${requestText}\n` +
-    `Requested   ${date}\n` +
-    `Status      New`,
+    `✅ ${b('Logged as #' + id)}\n\n` +
+    `👤 ${b('Requestor:')} ${h(requestor)}\n` +
+    `📝 ${b('Request:')} ${excerpt(requestText, 120)}\n` +
+    `📅 ${h(date)}\n` +
+    `🔵 Status: New`,
     [['Fill other fields now', 'Do it later']]
   );
   await setState(chatId, JSON.stringify({ step: 'post_log', rowId: id }));
@@ -286,17 +307,15 @@ async function startFillFlow(chatId: number, rowId: number): Promise<void> {
     return;
   }
 
-  // Show summary first so the user knows what they're editing
   await sendMessage(
     chatId,
-    `📋 Request #${row.id}\n\n` +
-    `Requestor   ${row.requestor}\n` +
-    `Request     ${row.request_text}\n` +
-    `Requested   ${formatDate(row.requested_date)}\n` +
-    `Priority    ${row.priority    || '—'}\n` +
-    `Complexity  ${row.complexity  || '—'}\n` +
-    `Status      ${row.status}\n` +
-    `Remarks     ${row.remarks     || '—'}\n\n` +
+    `📋 ${b('Request #' + row.id)}\n\n` +
+    `👤 ${b(h(row.requestor))}\n` +
+    `📝 ${excerpt(row.request_text, 120)}\n\n` +
+    `Priority    ${h(row.priority   || '—')}\n` +
+    `Complexity  ${h(row.complexity || '—')}\n` +
+    `Status      ${h(row.status)}\n` +
+    `Requested   ${formatDate(row.requested_date)}\n\n` +
     `Let's fill in the details 👇`
   );
 
@@ -306,7 +325,7 @@ async function startFillFlow(chatId: number, rowId: number): Promise<void> {
 async function askPriority(chatId: number, rowId: number): Promise<void> {
   await sendInlineKeyboard(
     chatId,
-    `Step 1 of 4 — Priority\nWhat's the priority for #${rowId}?`,
+    `${b('Step 1 of 4 — Priority')}\nWhat's the priority for #${rowId}?`,
     [['Urgent', 'High', 'Med', 'Low'], ['Skip']]
   );
   await setState(chatId, JSON.stringify({ step: 'priority', rowId }));
@@ -315,7 +334,7 @@ async function askPriority(chatId: number, rowId: number): Promise<void> {
 async function askComplexity(chatId: number, rowId: number, priority?: string): Promise<void> {
   await sendInlineKeyboard(
     chatId,
-    'Step 2 of 4 — Complexity\nComplexity?',
+    `${b('Step 2 of 4 — Complexity')}\nComplexity?`,
     [
       ['Minimal (half a day)', 'Moderate (1-2 days)'],
       ['Heavy (More than 2 days)', 'Long term (1 Month)'],
@@ -330,7 +349,7 @@ async function askStatus(chatId: number, rowId: number): Promise<void> {
   const current = row?.status || 'New';
   await sendInlineKeyboard(
     chatId,
-    `Step 3 of 4 — Status\nStatus? (currently ${current})`,
+    `${b('Step 3 of 4 — Status')}\nStatus? (currently ${h(current)})`,
     [
       ['New', 'In Progress', 'Blocked'],
       ['Done', 'Keep as New'],
@@ -342,7 +361,7 @@ async function askStatus(chatId: number, rowId: number): Promise<void> {
 async function askRemarks(chatId: number, rowId: number): Promise<void> {
   await sendInlineKeyboard(
     chatId,
-    'Step 4 of 4 — Remarks\nAny remarks? (reply with text or skip)',
+    `${b('Step 4 of 4 — Remarks')}\nAny remarks? (reply with text or skip)`,
     [['Skip']]
   );
   await setState(chatId, JSON.stringify({ step: 'remarks', rowId }));
@@ -358,62 +377,57 @@ async function sendPending(chatId: number): Promise<void> {
     return;
   }
 
-  const lines = rows.slice(0, 5).map(
-    (r) => `#${r.id} — ${r.request_text}\n  ${r.requestor} · ${r.priority || '—'} · ${r.status}`
+  const lines = rows.slice(0, 5).map((r) =>
+    `${b('#' + r.id)} · ${h(r.requestor)}\n` +
+    `${excerpt(r.request_text, 70)}\n` +
+    `${h(r.priority || '—')} · ${h(r.status)}`
   );
 
   await sendMessage(
     chatId,
-    `Open requests (${rows.length}):\n\n` +
+    `${b('Open requests (' + rows.length + ')')}\n\n` +
     lines.join('\n\n') +
-    '\n\nUse /edit [id] to update any row.'
+    '\n\n/edit [id] to update a row'
   );
 }
 
 // ── Suggestion engine ──────────────────────────────────────────
 
 function getSuggestion(priority: string, complexity: string): string {
-  const p = priority;
   const c = complexity.toLowerCase();
   const isMinimal  = c.includes('minimal');
   const isModerate = c.includes('moderate');
   const isHeavy    = c.includes('heavy');
 
-  if (p === 'Urgent') {
+  if (priority === 'Urgent') {
     if (isMinimal)  return '💡 Drop everything — aim to complete within 4 hours (quick fix).';
     if (isModerate) return '💡 Drop everything — aim to wrap up by end of day (1-2 days of work).';
-    if (isHeavy)    return '💡 Drop everything — this needs immediate attention. It\'s heavy, so loop in help if needed.';
+    if (isHeavy)    return '💡 Drop everything — heavy effort but urgent. Loop in help if needed.';
     return '💡 Drop everything — long haul but urgent. Break it into milestones and start now.';
   }
-  if (p === 'High') {
+  if (priority === 'High') {
     if (isMinimal)  return '💡 Today or tomorrow — it\'s a quick fix, no reason to delay.';
     if (isModerate) return '💡 Today or tomorrow — block time for this, it\'ll take 1-2 days.';
     if (isHeavy)    return '💡 Start today, target completion by end of week.';
-    return '💡 High priority but a long haul — start planning now and set a milestone for this week.';
+    return '💡 High priority but a long haul — start planning now, set a milestone this week.';
   }
-  if (p === 'Med') {
+  if (priority === 'Med') {
     return '💡 Within the week — don\'t let it slip past Friday.';
   }
-  if (p === 'Low') {
+  if (priority === 'Low') {
     return '💡 Nice to have — pick it up when you have spare capacity.';
   }
   return '';
 }
 
-// ── Helpers ────────────────────────────────────────────────────
+// ── Formatted summaries ────────────────────────────────────────
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
-}
-
-function formatSummary(rowId: number, row: Request | null): string {
+function formatUpdatedSummary(rowId: number, row: Request | null): string {
   return (
-    `✅ #${rowId} updated\n\n` +
-    `Priority:   ${row?.priority   || '—'}\n` +
-    `Complexity: ${row?.complexity || '—'}\n` +
-    `Status:     ${row?.status     || 'New'}\n` +
-    `Remarks:    ${row?.remarks    || '—'}`
+    `✅ ${b('#' + rowId + ' updated')}\n\n` +
+    `Priority    ${h(row?.priority   || '—')}\n` +
+    `Complexity  ${h(row?.complexity || '—')}\n` +
+    `Status      ${h(row?.status     || 'New')}\n` +
+    `Remarks     ${h(row?.remarks    || '—')}`
   );
 }

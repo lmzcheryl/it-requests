@@ -10,10 +10,9 @@ async function post(method: string, body: object): Promise<void> {
 }
 
 export async function sendMessage(chatId: number, text: string): Promise<void> {
-  await post('sendMessage', { chat_id: chatId, text });
+  await post('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML' });
 }
 
-// rows: each inner array is one row of buttons
 export async function sendInlineKeyboard(
   chatId: number,
   text: string,
@@ -22,6 +21,7 @@ export async function sendInlineKeyboard(
   await post('sendMessage', {
     chat_id: chatId,
     text,
+    parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: rows.map((row) =>
         row.map((label) => ({ text: label, callback_data: label }))
