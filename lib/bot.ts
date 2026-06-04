@@ -449,7 +449,7 @@ async function startFillFlow(chatId: number, rowId: number, loggedBy?: string): 
   const row = await getRow(rowId);
   if (!row) { await sendMessage(chatId, `❌ Request #${rowId} not found.`); return; }
   await sendMessage(chatId,
-    `📋 ${b('Request #' + row.id)}\n\n👤 ${b(h(row.requestor))}\n📝 ${excerpt(row.request_text, 120)}\n\n` +
+    `📋 ${b('Request #' + row.id)}\n\n👤 ${b(h(row.requestor))}\n📝 ${h(row.request_text)}\n\n` +
     `Priority    ${h(row.priority || '—')}\nComplexity  ${h(row.complexity || '—')}\nStatus      ${h(row.status)}\nRequested   ${formatDate(row.requested_date)}\n\nLet's fill in the details 👇`
   );
   // Skip already-filled fields, always ask status + remarks
