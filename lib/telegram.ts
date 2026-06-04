@@ -48,17 +48,11 @@ export async function answerCallback(callbackQueryId: string): Promise<void> {
   await post('answerCallbackQuery', { callback_query_id: callbackQueryId });
 }
 
-export async function editMessage(
-  chatId: number,
-  messageId: number,
-  text: string
-): Promise<void> {
-  await post('editMessageText', {
+export async function removeButtons(chatId: number, messageId: number): Promise<void> {
+  await post('editMessageReplyMarkup', {
     chat_id: chatId,
     message_id: messageId,
-    text,
-    parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: [] }, // removes buttons
+    reply_markup: { inline_keyboard: [] },
   });
 }
 

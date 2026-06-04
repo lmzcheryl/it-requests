@@ -1,4 +1,4 @@
-import { sendMessage, sendInlineKeyboard, sendButtons, answerCallback, editMessage } from './telegram';
+import { sendMessage, sendInlineKeyboard, sendButtons, answerCallback, removeButtons } from './telegram';
 import {
   appendRequest,
   appendSignalLog,
@@ -122,11 +122,10 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   const messageId = cq.message?.message_id;
   if (!chatId || !cq.data) return;
 
-  // Helper: stamp selection onto the button message and remove buttons
-  const confirm = (label: string) => {
+  // Remove buttons from the tapped message so it's clear the tap registered
+  const confirm = (_label: string) => {
     if (!messageId) return Promise.resolve();
-    const original = cq.message?.text || '';
-    return editMessage(chatId, messageId, `${original}\n\n✅ ${h(label)}`);
+    return removeButtons(chatId, messageId);
   };
 
   // Edit button from /pending
