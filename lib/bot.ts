@@ -274,7 +274,8 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
     return;
   }
   if (state.step === 'signal_impact') {
-    await confirm('Skip');
+    await confirm(data);
+    if (data !== 'Skip') await updateSignalField(state.signalId!, 'impact', data);
     await askSignalTempFix(chatId, state.signalId!, state.rowId, state.loggedBy);
     return;
   }
@@ -370,11 +371,7 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
       return;
     }
     // Signal free-text steps
-    if (state.step === 'signal_impact') {
-      await updateSignalField(state.signalId!, 'impact', text);
-      await askSignalTempFix(chatId, state.signalId!, state.rowId, state.loggedBy);
-      return;
-    }
+    // signal_impact is now buttons-only, no free text handler needed
     if (state.step === 'signal_temp_fix') {
       await updateSignalField(state.signalId!, 'temporary_fix', text);
       await askSignalRootCause(chatId, state.signalId!, state.rowId, state.loggedBy);
@@ -513,9 +510,12 @@ async function startSignalFlow(chatId: number, rowId: number, whatHappened: stri
 async function askSignalType(chatId: number, signalId: number, rowId?: number, loggedBy?: string): Promise<void> {
   await sendInlineKeyboard(chatId, `${b('Signal Step 1 of 5 — Type')}\nWhat type of signal is this?`,
     [
-      ['Recurring Manual work', 'Bugs'],
-      ['Process unclear or not followed', 'Unplanned firefighting'],
-      ["Can't trace why this is happening", 'Recurring system error'],
+      ['Recurring Manual work'],
+      ['Bugs'],
+      ['Process unclear or not followed'],
+      ['Unplanned firefighting'],
+      ["Can't trace why this is happening"],
+      ['Recurring system error'],
       ['Skip'],
     ]
   );
@@ -523,7 +523,9 @@ async function askSignalType(chatId: number, signalId: number, rowId?: number, l
 }
 
 async function askSignalImpact(chatId: number, signalId: number, rowId?: number, loggedBy?: string): Promise<void> {
-  await sendInlineKeyboard(chatId, `${b('Signal Step 2 of 5 — Impact')}\nWhat's the impact? (reply with text or skip)`, [['Skip']]);
+  await sendInlineKeyboard(chatId, `${b('Signal Step 2 of 5 — Impact')}\nWho is impacted?`,
+    [['Internal Only', 'Cross-Functional', 'External'], ['Skip']]
+  );
   await setState(chatId, JSON.stringify({ step: 'signal_impact', signalId, rowId, loggedBy }));
 }
 
