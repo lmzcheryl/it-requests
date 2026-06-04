@@ -48,6 +48,20 @@ export async function answerCallback(callbackQueryId: string): Promise<void> {
   await post('answerCallbackQuery', { callback_query_id: callbackQueryId });
 }
 
+export async function editMessage(
+  chatId: number,
+  messageId: number,
+  text: string
+): Promise<void> {
+  await post('editMessageText', {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: [] }, // removes buttons
+  });
+}
+
 export async function setWebhook(webhookUrl: string): Promise<string> {
   await fetch(`${TG_BASE}/deleteWebhook`);
   const res = await fetch(`${TG_BASE}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);

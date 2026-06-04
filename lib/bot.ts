@@ -1,4 +1,4 @@
-import { sendMessage, sendInlineKeyboard, sendButtons, answerCallback } from './telegram';
+import { sendMessage, sendInlineKeyboard, sendButtons, answerCallback, editMessage } from './telegram';
 import {
   appendRequest,
   appendSignalLog,
@@ -42,7 +42,7 @@ interface TelegramMessage {
 interface CallbackQuery {
   id: string;
   data?: string;
-  message?: { chat: { id: number } };
+  message?: { chat: { id: number }; message_id: number; text?: string };
 }
 
 interface FlowState {
@@ -119,7 +119,15 @@ export async function checkReminders(): Promise<void> {
 async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   await answerCallback(cq.id);
   const chatId = cq.message?.chat.id;
+  const messageId = cq.message?.message_id;
   if (!chatId || !cq.data) return;
+
+  // Helper: stamp selection onto the button message and remove buttons
+  const confirm = (label: string) => {
+    if (!messageId) return Promise.resolve();
+    const original = cq.message?.text || '';
+    return editMessage(chatId, messageId, `${original}\n\n✅ ${h(label)}`);
+  };
 
   // Edit button from /pending
   if (cq.data.startsWith('edit:')) {
@@ -137,11 +145,13 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
 
   if (state.step === 'ask_requestor') {
     if (data === 'Other (type name)') { await sendMessage(chatId, "Type the requestor's name:"); return; }
+    await confirm(data);
     await logAndConfirm(chatId, data, state.requestText!, state.loggedBy!);
     return;
   }
 
   if (state.step === 'post_log') {
+    await confirm(data);
     if (data === 'Fill other fields now') {
       await startFillFlow(chatId, state.rowId!, state.loggedBy);
     } else {
@@ -154,12 +164,14 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   }
 
   if (state.step === 'priority') {
+    await confirm(data);
     if (data !== 'Skip') await updateField(state.rowId!, 'priority', data);
     await askComplexity(chatId, state.rowId!, data !== 'Skip' ? data : undefined, state.loggedBy);
     return;
   }
 
   if (state.step === 'complexity') {
+    await confirm(data);
     if (data !== 'Skip') await updateField(state.rowId!, 'complexity', data);
     if (state.priority && data !== 'Skip') {
       const sug = getSuggestion(state.priority, data);
@@ -170,13 +182,14 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   }
 
   if (state.step === 'status') {
+    await confirm(data);
     if (data !== 'Skip' && data !== 'Keep as New') await updateField(state.rowId!, 'status', data);
     await askRemarks(chatId, state.rowId!, state.loggedBy);
     return;
   }
 
   if (state.step === 'remarks') {
-    // Skip tapped — go to signal question
+    await confirm('Skip');
     await askSignalQuestion(chatId, state.rowId!, state.loggedBy!);
     return;
   }
@@ -184,6 +197,7 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   // ── Signal decision ──────────────────────────────────────────
 
   if (state.step === 'ask_signal') {
+    await confirm(data);
     if (data === 'Yes — add signal details') {
       const row = await getRow(state.rowId!);
       await startSignalFlow(chatId, state.rowId!, row?.request_text || '', state.loggedBy!);
@@ -198,28 +212,33 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   // ── Signal fill flow ─────────────────────────────────────────
 
   if (state.step === 'signal_type') {
+    await confirm(data);
     if (data !== 'Skip') await updateSignalField(state.signalId!, 'signal_type', data);
     await askSignalImpact(chatId, state.signalId!, state.rowId, state.loggedBy);
     return;
   }
   if (state.step === 'signal_impact') {
-    // Skip tapped
+    await confirm('Skip');
     await askSignalTempFix(chatId, state.signalId!, state.rowId, state.loggedBy);
     return;
   }
   if (state.step === 'signal_temp_fix') {
+    await confirm('Skip');
     await askSignalRootCause(chatId, state.signalId!, state.rowId, state.loggedBy);
     return;
   }
   if (state.step === 'signal_root_cause') {
+    await confirm('Skip');
     await askSignalKaizen(chatId, state.signalId!, state.rowId, state.loggedBy);
     return;
   }
   if (state.step === 'signal_kaizen') {
+    await confirm('Skip');
     await askSignalResolved(chatId, state.signalId!, state.rowId);
     return;
   }
   if (state.step === 'signal_resolved') {
+    await confirm(data);
     if (data !== 'Skip') await updateSignalField(state.signalId!, 'resolved', data);
     await clearState(chatId);
     const row = await getRow(state.rowId!);
