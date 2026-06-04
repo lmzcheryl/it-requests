@@ -136,6 +136,11 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
     return removeButtons(chatId, messageId);
   };
 
+  // Global navigation buttons
+  if (data === '📋 Pending')      { await sendPending(chatId, false); return; }
+  if (data === '📊 All Requests') { await sendPending(chatId, true);  return; }
+  if (data === '❓ Help')         { await sendHelp(chatId);           return; }
+
   // Edit button from /pending
   if (cq.data.startsWith('edit:')) {
     await clearState(chatId);
