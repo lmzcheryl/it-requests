@@ -148,7 +148,7 @@ export async function appendSignalLog(
 ): Promise<number> {
   const { data, error } = await supabase
     .from('signal_logs')
-    .insert({ what_happened: whatHappened, logged_by: loggedBy, chat_id: chatId, request_id: requestId ?? null })
+    .insert({ what_happened: whatHappened, logged_by: loggedBy || process.env.LOGGED_BY_NAME || 'Cheryl', chat_id: chatId, request_id: requestId ?? null })
     .select('id')
     .single();
   if (error) throw error;

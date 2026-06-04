@@ -139,7 +139,7 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   // Edit button from /pending
   if (cq.data.startsWith('edit:')) {
     await clearState(chatId);
-    await startFillFlow(chatId, parseInt(cq.data.split(':')[1]));
+    await startFillFlow(chatId, parseInt(cq.data.split(':')[1]), process.env.LOGGED_BY_NAME || 'Cheryl');
     return;
   }
 
