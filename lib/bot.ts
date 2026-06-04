@@ -562,9 +562,9 @@ async function sendPending(chatId: number, includeAll: boolean): Promise<void> {
 
   // Edit buttons in rows of 3
   const editButtons: { text: string; callback_data: string }[][] = [];
-  for (let i = 0; i < shown.length; i += 3) {
+  for (let i = 0; i < shown.length; i += 4) {
     editButtons.push(
-      shown.slice(i, i + 3).map(r => ({ text: `✏️ #${r.id}`, callback_data: `edit:${r.id}` }))
+      shown.slice(i, i + 4).map(r => ({ text: `✏️ #${r.id}`, callback_data: `edit:${r.id}` }))
     );
   }
 
