@@ -556,24 +556,24 @@ async function sendPending(chatId: number, includeAll: boolean): Promise<void> {
 
   const shown = rows.slice(0, 8);
 
-  // Each request = one keyboard row: [title + meta] [✏️]
-  // Both buttons trigger the edit flow
-  const keyboard = shown.map(r => [
-    {
-      text: `#${r.id}  ${plainExcerpt(r.request_text, 30)}\n${r.requestor} · ${r.priority || '—'} · ${r.status} · ${shortDate(r.requested_date)}`,
-      callback_data: `edit:${r.id}`,
-    },
-    {
-      text: '✏️',
-      callback_data: `edit:${r.id}`,
-    },
-  ]);
+  const lines = shown.map(r =>
+    `${b('#' + r.id)}  ${excerpt(r.request_text, 55)}\n${h(r.requestor)} · ${h(r.priority || '—')} · ${h(r.status)} · ${shortDate(r.requested_date)}`
+  );
+
+  // Edit buttons in rows of 3
+  const editButtons: { text: string; callback_data: string }[][] = [];
+  for (let i = 0; i < shown.length; i += 3) {
+    editButtons.push(
+      shown.slice(i, i + 3).map(r => ({ text: `✏️ #${r.id}`, callback_data: `edit:${r.id}` }))
+    );
+  }
 
   await sendButtons(
     chatId,
-    `${b(label + ' (' + rows.length + ')')}` +
-    (includeAll ? '' : '\n/all — see all including Done'),
-    keyboard
+    `${b(label + ' (' + rows.length + ')')}\n\n` +
+    lines.join('\n\n') +
+    (includeAll ? '' : '\n\n/all — see all including Done'),
+    editButtons
   );
 }
 
