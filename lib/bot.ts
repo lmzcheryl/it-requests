@@ -551,21 +551,25 @@ async function sendPending(chatId: number, includeAll: boolean): Promise<void> {
 
   const shown = rows.slice(0, 8);
 
-  // Header
-  await sendMessage(
-    chatId,
-    `${b(label + ' (' + rows.length + ')')}` +
-    (includeAll ? '' : '\n\n/all — see all including Done')
+  const lines = shown.map(r =>
+    `${b('#' + r.id)}  ${excerpt(r.request_text, 55)}\n${h(r.requestor)} · ${h(r.priority || '—')} · ${h(r.status)} · ${shortDate(r.requested_date)}`
   );
 
-  // One message per request with its own Edit button
-  for (const r of shown) {
-    await sendButtons(
-      chatId,
-      `${b('#' + r.id)}  ${excerpt(r.request_text, 60)}\n${h(r.requestor)} · ${h(r.priority || '—')} · ${h(r.status)} · ${shortDate(r.requested_date)}`,
-      [[{ text: '✏️ Edit', callback_data: `edit:${r.id}` }]]
+  // Edit buttons in rows of 3
+  const editButtons: { text: string; callback_data: string }[][] = [];
+  for (let i = 0; i < shown.length; i += 3) {
+    editButtons.push(
+      shown.slice(i, i + 3).map(r => ({ text: `✏️ #${r.id}`, callback_data: `edit:${r.id}` }))
     );
   }
+
+  await sendButtons(
+    chatId,
+    `${b(label + ' (' + rows.length + ')')}\n\n` +
+    lines.join('\n\n') +
+    (includeAll ? '' : '\n\n/all — see all including Done'),
+    editButtons
+  );
 }
 
 // ── Suggestion engine ──────────────────────────────────────────
