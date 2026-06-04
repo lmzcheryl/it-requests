@@ -129,6 +129,7 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   const chatId = cq.message?.chat.id;
   const messageId = cq.message?.message_id;
   if (!chatId || !cq.data) return;
+  const data = cq.data;
 
   // Remove buttons from the tapped message so it's clear the tap registered
   const confirm = (_label: string) => {
@@ -151,7 +152,6 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   const stateJson = await getState(chatId);
   if (!stateJson) return;
   const state: FlowState = JSON.parse(stateJson);
-  const data = cq.data;
 
   // ── IT Request flow ──────────────────────────────────────────
 
