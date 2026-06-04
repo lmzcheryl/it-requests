@@ -73,6 +73,12 @@ function excerpt(text: string, maxLen = 80): string {
   return h(line.length > maxLen ? line.slice(0, maxLen - 1) + '…' : line);
 }
 
+// Plain version for button labels (no HTML escaping)
+function plainExcerpt(text: string, maxLen = 40): string {
+  const line = text.split('\n').map(l => l.trim()).find(l => l.length > 0) || text;
+  return line.length > maxLen ? line.slice(0, maxLen - 1) + '…' : line;
+}
+
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
@@ -551,24 +557,24 @@ async function sendPending(chatId: number, includeAll: boolean): Promise<void> {
 
   const shown = rows.slice(0, 8);
 
-  const lines = shown.map(r =>
-    `${b('#' + r.id)}  ${excerpt(r.request_text, 55)}\n${h(r.requestor)} · ${h(r.priority || '—')} · ${h(r.status)} · ${shortDate(r.requested_date)}`
-  );
-
-  // Edit buttons in rows of 3
-  const editButtons: { text: string; callback_data: string }[][] = [];
-  for (let i = 0; i < shown.length; i += 3) {
-    editButtons.push(
-      shown.slice(i, i + 3).map(r => ({ text: `✏️ #${r.id}`, callback_data: `edit:${r.id}` }))
-    );
-  }
+  // Each request = one keyboard row: [title + meta] [✏️]
+  // Both buttons trigger the edit flow
+  const keyboard = shown.map(r => [
+    {
+      text: `#${r.id}  ${plainExcerpt(r.request_text, 30)}\n${r.requestor} · ${r.priority || '—'} · ${r.status} · ${shortDate(r.requested_date)}`,
+      callback_data: `edit:${r.id}`,
+    },
+    {
+      text: '✏️',
+      callback_data: `edit:${r.id}`,
+    },
+  ]);
 
   await sendButtons(
     chatId,
-    `${b(label + ' (' + rows.length + ')')}\n\n` +
-    lines.join('\n\n') +
-    (includeAll ? '' : '\n\n/all — see all including Done'),
-    editButtons
+    `${b(label + ' (' + rows.length + ')')}` +
+    (includeAll ? '' : '\n/all — see all including Done'),
+    keyboard
   );
 }
 
