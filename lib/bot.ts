@@ -1,4 +1,4 @@
-import { sendMessage, sendInlineKeyboard, answerCallback } from './telegram';
+import { sendMessage, sendInlineKeyboard, sendButtons, answerCallback } from './telegram';
 import {
   appendRequest,
   appendSignalLog,
@@ -441,21 +441,22 @@ async function sendPending(chatId: number, includeAll: boolean): Promise<void> {
   if (!rows.length) { await sendMessage(chatId, 'No requests found 🎉'); return; }
 
   const shown = rows.slice(0, 8);
-  const lines = shown.map(r =>
-    `${b('#' + r.id)}  ${excerpt(r.request_text, 60)}\n${h(r.requestor)} · ${h(r.priority || '—')} · ${h(r.status)} · ${shortDate(r.requested_date)}`
-  );
-  const editButtons = shown.map(r => [{ text: `✏️ #${r.id}`, callback_data: `edit:${r.id}` }]);
 
-  await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: `${b(label + ' (' + rows.length + ')')}\n\n` + lines.join('\n\n') + (includeAll ? '' : '\n\n/all — see all including Done'),
-      parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: editButtons },
-    }),
-  });
+  // Header
+  await sendMessage(
+    chatId,
+    `${b(label + ' (' + rows.length + ')')}` +
+    (includeAll ? '' : '\n\n/all — see all including Done')
+  );
+
+  // One message per request with its own Edit button
+  for (const r of shown) {
+    await sendButtons(
+      chatId,
+      `${b('#' + r.id)}  ${excerpt(r.request_text, 60)}\n${h(r.requestor)} · ${h(r.priority || '—')} · ${h(r.status)} · ${shortDate(r.requested_date)}`,
+      [[{ text: '✏️ Edit', callback_data: `edit:${r.id}` }]]
+    );
+  }
 }
 
 // ── Suggestion engine ──────────────────────────────────────────

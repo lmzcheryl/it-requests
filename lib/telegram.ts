@@ -30,6 +30,20 @@ export async function sendInlineKeyboard(
   });
 }
 
+// Like sendInlineKeyboard but accepts pre-formed button objects
+export async function sendButtons(
+  chatId: number,
+  text: string,
+  rows: { text: string; callback_data: string }[][]
+): Promise<void> {
+  await post('sendMessage', {
+    chat_id: chatId,
+    text,
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: rows },
+  });
+}
+
 export async function answerCallback(callbackQueryId: string): Promise<void> {
   await post('answerCallbackQuery', { callback_query_id: callbackQueryId });
 }
