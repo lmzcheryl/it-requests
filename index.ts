@@ -1,7 +1,7 @@
 import http from 'http';
 import { Pool } from 'pg';
 import { handleUpdate, checkReminders } from './lib/bot';
-import { setWebhook } from './lib/telegram';
+import { setWebhook, registerCommands } from './lib/telegram';
 
 const PORT = process.env.PORT || 3000;
 
@@ -92,7 +92,10 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(200).end('ok');
 });
 
-server.listen(PORT, () => console.log(`Bot server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Bot server running on port ${PORT}`);
+  registerCommands().catch(err => console.error('[commands]', err));
+});
 
 setInterval(() => {
   checkReminders().catch((err) => console.error('[reminders]', err));

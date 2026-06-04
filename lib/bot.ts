@@ -201,7 +201,7 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   }
 
   if (state.step === 'remarks') {
-    await confirm('Skip');
+    await confirm(data);
     await askSignalQuestion(chatId, state.rowId!, state.loggedBy!);
     return;
   }
@@ -218,6 +218,7 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
       await clearState(chatId);
       await sendMessage(chatId, `Cancelled — #${state.rowId} is still there.`);
     }
+    await sendQuickActions(chatId);
     return;
   }
 
@@ -259,6 +260,7 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
       await clearState(chatId);
       const row = await getRow(state.rowId!);
       await sendMessage(chatId, formatRequestSummary(state.rowId!, row));
+      await sendQuickActions(chatId);
     }
     return;
   }
@@ -302,6 +304,7 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
     } else {
       await sendMessage(chatId, formatSignalSummary(state.signalId!, sig));
     }
+    await sendQuickActions(chatId);
     return;
   }
 }
@@ -314,8 +317,9 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
   const stateJson = await getState(chatId);
   const loggedBy = process.env.LOGGED_BY_NAME || 'Cheryl';
 
-  if (text === '/pending') { await sendPending(chatId, false); return; }
-  if (text === '/all')     { await sendPending(chatId, true);  return; }
+  if (text === '/start' || text === '/help' || text === '❓ Help') { await sendHelp(chatId); return; }
+  if (text === '/pending' || text === '📋 Pending') { await sendPending(chatId, false); return; }
+  if (text === '/all'     || text === '📊 All Requests') { await sendPending(chatId, true); return; }
   if (text === '/cancel')  {
     await clearState(chatId);
     await sendMessage(chatId, '❌ Cancelled. Forward a message to log a new request.');
@@ -389,14 +393,9 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
     return;
   }
 
-  await sendMessage(chatId,
-    'Forward me a message to log a request.\n\n' +
-    '/pending — open requests\n' +
-    '/all — all requests incl. Done\n' +
-    '/edit 23 — update a request\n' +
-    '/delete 23 — delete a request\n' +
-    '/signal 5 — fill signal log details\n' +
-    '/cancel — exit current flow'
+  await sendInlineKeyboard(chatId,
+    'Forward a message to log a new IT request, or use the buttons below.',
+    [['📋 Pending', '📊 All Requests'], ['❓ Help']]
   );
 }
 
@@ -600,6 +599,28 @@ function getSuggestion(priority: string, complexity: string): string {
 }
 
 // ── Summaries ──────────────────────────────────────────────────
+
+async function sendQuickActions(chatId: number): Promise<void> {
+  await sendInlineKeyboard(chatId, 'What\'s next?',
+    [['📋 Pending', '📊 All Requests']]
+  );
+}
+
+async function sendHelp(chatId: number): Promise<void> {
+  await sendInlineKeyboard(chatId,
+    `👋 ${b('TC IT Request Bot')}\n\n` +
+    `${b('Logging a request')}\nForward any message → bot logs it as an IT request\n\n` +
+    `${b('Commands')}\n` +
+    `/pending — open requests\n` +
+    `/all — all requests incl. Done\n` +
+    `/edit 5 — update a request\n` +
+    `/delete 5 — delete a request\n` +
+    `/signal 5 — fill signal log details\n` +
+    `/cancel — exit current flow\n\n` +
+    `${b('Signal Logs')}\nAfter filling in an IT request, you'll be asked if it's also a Signal Log — for tracking recurring issues or process gaps.`,
+    [['📋 Pending', '📊 All Requests']]
+  );
+}
 
 function formatSignalSummary(signalId: number, sig: SignalLog | null): string {
   return (

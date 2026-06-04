@@ -61,3 +61,14 @@ export async function setWebhook(webhookUrl: string): Promise<string> {
   const res = await fetch(`${TG_BASE}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
   return res.text();
 }
+
+export async function registerCommands(): Promise<void> {
+  await post('setMyCommands', {
+    commands: [
+      { command: 'pending',  description: '📋 View open requests' },
+      { command: 'all',      description: '📊 View all requests including Done' },
+      { command: 'help',     description: '❓ Show all commands' },
+      { command: 'cancel',   description: '✖️ Exit current flow' },
+    ],
+  });
+}
