@@ -548,6 +548,18 @@ function getSuggestion(priority: string, complexity: string): string {
 
 // ── Summaries ──────────────────────────────────────────────────
 
+function formatSignalSummary(signalId: number, sig: SignalLog | null): string {
+  return (
+    `✅ ${b('Signal Log #' + signalId + ' updated')}\n\n` +
+    `Type        ${h(sig?.signal_type      || '—')}\n` +
+    `Impact      ${h(sig?.impact           || '—')}\n` +
+    `Temp Fix    ${h(sig?.temporary_fix    || '—')}\n` +
+    `Root Cause  ${h(sig?.root_cause_guess || '—')}\n` +
+    `Kaizen      ${h(sig?.kaizen_ideas     || '—')}\n` +
+    `Resolved    ${h(sig?.resolved         || '—')}`
+  );
+}
+
 function formatRequestSummary(rowId: number, row: Request | null): string {
   return (
     `✅ ${b('#' + rowId + ' updated')}\n\n` +
