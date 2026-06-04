@@ -197,10 +197,37 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
 
   if (state.step === 'ask_signal') {
     await confirm(data);
-    if (data === 'Yes — add signal details') {
-      const row = await getRow(state.rowId!);
-      await startSignalFlow(chatId, state.rowId!, row?.request_text || '', state.loggedBy!);
+    if (data === 'Yes — fill now') {
+      try {
+        const row = await getRow(state.rowId!);
+        await startSignalFlow(chatId, state.rowId!, row?.request_text || '', state.loggedBy!);
+      } catch (err) {
+        console.error('[signal-log]', err);
+        await clearState(chatId);
+        await sendMessage(chatId,
+          `⚠️ Couldn't create signal log — the table may not exist yet.\n\n` +
+          `Visit your-app.railway.app/setup-db to set it up, then try again.\n\n` +
+          `Your IT request #${state.rowId} is already saved.`
+        );
+      }
+    } else if (data === 'Yes — save & fill later') {
+      try {
+        const row = await getRow(state.rowId!);
+        const signalId = await appendSignalLog(row?.request_text || '', state.loggedBy!, chatId, state.rowId!);
+        await clearState(chatId);
+        const itSummary = formatRequestSummary(state.rowId!, row);
+        await sendMessage(chatId,
+          `${itSummary}\n\n` +
+          `📊 ${b('Signal #' + signalId + ' saved')} — linked to IT Request #${state.rowId}\n\n` +
+          `/signal ${signalId} — fill in the details when ready`
+        );
+      } catch (err) {
+        console.error('[signal-log]', err);
+        await clearState(chatId);
+        await sendMessage(chatId, `⚠️ Couldn't save signal log. Your IT request #${state.rowId} is still saved.`);
+      }
     } else {
+      // No
       await clearState(chatId);
       const row = await getRow(state.rowId!);
       await sendMessage(chatId, formatRequestSummary(state.rowId!, row));
@@ -240,9 +267,13 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
     await confirm(data);
     if (data !== 'Skip') await updateSignalField(state.signalId!, 'resolved', data);
     await clearState(chatId);
-    const row = await getRow(state.rowId!);
     const sig = await getSignalRow(state.signalId!);
-    await sendMessage(chatId, formatCombinedSummary(state.rowId!, row, state.signalId!, sig));
+    if (state.rowId) {
+      const row = await getRow(state.rowId);
+      await sendMessage(chatId, formatCombinedSummary(state.rowId, row, state.signalId!, sig));
+    } else {
+      await sendMessage(chatId, formatSignalSummary(state.signalId!, sig));
+    }
     return;
   }
 }
@@ -257,6 +288,18 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
 
   if (text === '/pending') { await sendPending(chatId, false); return; }
   if (text === '/all')     { await sendPending(chatId, true);  return; }
+  if (text === '/cancel')  {
+    await clearState(chatId);
+    await sendMessage(chatId, '❌ Cancelled. Forward a message to log a new request.');
+    return;
+  }
+
+  const signalMatch = text.match(/^\/signal\D*(\d+)/);
+  if (signalMatch) {
+    await clearState(chatId);
+    await askSignalType(chatId, parseInt(signalMatch[1]), undefined, loggedBy);
+    return;
+  }
 
   const editMatch = text.match(/^\/edit\D*(\d+)/);
   if (editMatch) { await startFillFlow(chatId, parseInt(editMatch[1]), loggedBy); return; }
@@ -306,7 +349,12 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
   }
 
   await sendMessage(chatId,
-    'Forward me a message to log a request.\n\n/pending — open requests\n/all — all requests incl. Done\n/edit 23 — update a row'
+    'Forward me a message to log a request.\n\n' +
+    '/pending — open requests\n' +
+    '/all — all requests incl. Done\n' +
+    '/edit 23 — update a request\n' +
+    '/signal 5 — fill signal log details\n' +
+    '/cancel — exit current flow'
   );
 }
 
@@ -401,7 +449,7 @@ async function askRemarks(chatId: number, rowId: number, loggedBy?: string): Pro
 async function askSignalQuestion(chatId: number, rowId: number, loggedBy: string): Promise<void> {
   await sendInlineKeyboard(chatId,
     `📊 ${b('Is this also a Signal Log?')}\n\nSignal logs track recurring issues, bugs, or process gaps for future improvement.`,
-    [['Yes — add signal details', 'No, done']]
+    [['Yes — fill now', 'Yes — save & fill later'], ['No']]
   );
   await setState(chatId, JSON.stringify({ step: 'ask_signal', rowId, loggedBy }));
 }
