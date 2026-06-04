@@ -167,7 +167,12 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
   if (state.step === 'priority') {
     await confirm(data);
     if (data !== 'Skip') await updateField(state.rowId!, 'priority', data);
-    await askComplexity(chatId, state.rowId!, data !== 'Skip' ? data : undefined, state.loggedBy);
+    const rowAfterPriority = await getRow(state.rowId!);
+    if (rowAfterPriority?.complexity) {
+      await askStatus(chatId, state.rowId!, state.loggedBy);
+    } else {
+      await askComplexity(chatId, state.rowId!, data !== 'Skip' ? data : undefined, state.loggedBy);
+    }
     return;
   }
 
@@ -442,7 +447,14 @@ async function startFillFlow(chatId: number, rowId: number, loggedBy?: string): 
     `📋 ${b('Request #' + row.id)}\n\n👤 ${b(h(row.requestor))}\n📝 ${excerpt(row.request_text, 120)}\n\n` +
     `Priority    ${h(row.priority || '—')}\nComplexity  ${h(row.complexity || '—')}\nStatus      ${h(row.status)}\nRequested   ${formatDate(row.requested_date)}\n\nLet's fill in the details 👇`
   );
-  await askPriority(chatId, rowId, loggedBy);
+  // Skip already-filled fields, always ask status + remarks
+  if (!row.priority) {
+    await askPriority(chatId, rowId, loggedBy);
+  } else if (!row.complexity) {
+    await askComplexity(chatId, rowId, row.priority || undefined, loggedBy);
+  } else {
+    await askStatus(chatId, rowId, loggedBy);
+  }
 }
 
 async function askPriority(chatId: number, rowId: number, loggedBy?: string): Promise<void> {
