@@ -3,6 +3,7 @@ import {
   appendRequest,
   appendSignalLog,
   clearState,
+  deleteRequest,
   getAllRequests,
   getOverdueRequests,
   getRecentRequestors,
@@ -51,7 +52,8 @@ interface FlowState {
     | 'priority' | 'complexity' | 'status' | 'remarks'
     | 'ask_signal'
     | 'signal_type' | 'signal_impact' | 'signal_temp_fix'
-    | 'signal_root_cause' | 'signal_kaizen' | 'signal_resolved';
+    | 'signal_root_cause' | 'signal_kaizen' | 'signal_resolved'
+    | 'confirm_delete';
   rowId?: number;
   signalId?: number;
   requestText?: string;
@@ -193,6 +195,21 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
     return;
   }
 
+  // ── Delete confirmation ──────────────────────────────────────
+
+  if (state.step === 'confirm_delete') {
+    await confirm(data);
+    if (data === 'Yes, delete it') {
+      await deleteRequest(state.rowId!);
+      await clearState(chatId);
+      await sendMessage(chatId, `🗑 ${b('#' + state.rowId + ' deleted.')}`);
+    } else {
+      await clearState(chatId);
+      await sendMessage(chatId, `Cancelled — #${state.rowId} is still there.`);
+    }
+    return;
+  }
+
   // ── Signal decision ──────────────────────────────────────────
 
   if (state.step === 'ask_signal') {
@@ -301,6 +318,19 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
     return;
   }
 
+  const deleteMatch = text.match(/^\/delete\D*(\d+)/);
+  if (deleteMatch) {
+    const rowId = parseInt(deleteMatch[1]);
+    const row = await getRow(rowId);
+    if (!row) { await sendMessage(chatId, `❌ Request #${rowId} not found.`); return; }
+    await sendInlineKeyboard(chatId,
+      `🗑 ${b('Delete #' + rowId + '?')}\n\n📝 ${excerpt(row.request_text, 80)}\n👤 ${h(row.requestor)}\n\nThis cannot be undone.`,
+      [['Yes, delete it', 'Cancel']]
+    );
+    await setState(chatId, JSON.stringify({ step: 'confirm_delete', rowId }));
+    return;
+  }
+
   const editMatch = text.match(/^\/edit\D*(\d+)/);
   if (editMatch) { await startFillFlow(chatId, parseInt(editMatch[1]), loggedBy); return; }
 
@@ -353,6 +383,7 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
     '/pending — open requests\n' +
     '/all — all requests incl. Done\n' +
     '/edit 23 — update a request\n' +
+    '/delete 23 — delete a request\n' +
     '/signal 5 — fill signal log details\n' +
     '/cancel — exit current flow'
   );

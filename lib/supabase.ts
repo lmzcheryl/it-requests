@@ -178,6 +178,10 @@ export async function getSignalRow(signalId: number): Promise<SignalLog | null> 
 
 // ── State ──────────────────────────────────────────────────────
 
+export async function deleteRequest(rowId: number): Promise<void> {
+  await supabase.from('requests').delete().eq('id', rowId);
+}
+
 export async function getState(chatId: number): Promise<string | null> {
   const { data } = await supabase
     .from('bot_state')
