@@ -114,7 +114,7 @@ export async function checkReminders(): Promise<void> {
   for (const req of overdue) {
     await sendMessage(req.chat_id,
       `⏰ ${b('Reminder')} — ${b('#' + req.id)} is still open\n\n` +
-      `👤 ${h(req.requestor)}\n📝 ${excerpt(req.request_text)}\n` +
+      `👤 ${h(req.requestor)}\n📝 ${h(req.request_text)}\n` +
       `🔺 ${h(req.priority || '—')} · ${h(req.status)} · ${getAge(req.created_at)} old\n\n` +
       `<i>${h(PRIORITY_GUIDE[req.priority!] || '')}</i>\n\n/edit ${req.id} — update status`
     );
