@@ -234,7 +234,10 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
     if (data === 'Yes — fill now') {
       try {
         const row = await getRow(state.rowId!);
-        await startSignalFlow(chatId, state.rowId!, row?.request_text || '', state.loggedBy!);
+        const whatHappened = row?.remarks
+          ? `${row.request_text}\n\nRemarks: ${row.remarks}`
+          : (row?.request_text || '');
+        await startSignalFlow(chatId, state.rowId!, whatHappened, state.loggedBy!);
       } catch (err) {
         console.error('[signal-log]', err);
         await clearState(chatId);
@@ -247,7 +250,10 @@ async function handleCallbackQuery(cq: CallbackQuery): Promise<void> {
     } else if (data === 'Yes — save & fill later') {
       try {
         const row = await getRow(state.rowId!);
-        const signalId = await appendSignalLog(row?.request_text || '', state.loggedBy!, chatId, state.rowId!);
+        const whatHappened2 = row?.remarks
+          ? `${row.request_text}\n\nRemarks: ${row.remarks}`
+          : (row?.request_text || '');
+        const signalId = await appendSignalLog(whatHappened2, state.loggedBy!, chatId, state.rowId!);
         await clearState(chatId);
         const itSummary = formatRequestSummary(state.rowId!, row);
         await sendMessage(chatId,
