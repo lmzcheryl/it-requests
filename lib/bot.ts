@@ -401,10 +401,15 @@ async function handleMessage(msg: TelegramMessage): Promise<void> {
     return;
   }
 
+  // Plain text with no active state — treat as manual request, ask for requestor
+  const recent = await getRecentRequestors();
+  const nameRows = recent.map(name => [name]);
+  nameRows.push(['Other (type name)']);
   await sendInlineKeyboard(chatId,
-    'Forward a message to log a new IT request, or use the buttons below.',
-    [['📋 Pending', '📊 All Requests'], ['❓ Help']]
+    `📝 ${b('New request logged as:')}\n${h(text.slice(0, 200))}\n\nWho is the requestor?`,
+    nameRows
   );
+  await setState(chatId, JSON.stringify({ step: 'ask_requestor', requestText: text, loggedBy }));
 }
 
 // ── Forward handler ────────────────────────────────────────────
@@ -622,7 +627,7 @@ async function sendQuickActions(chatId: number): Promise<void> {
 async function sendHelp(chatId: number): Promise<void> {
   await sendInlineKeyboard(chatId,
     `👋 ${b('TC IT Request Bot')}\n\n` +
-    `${b('Logging a request')}\nForward any message → bot logs it as an IT request\n\n` +
+    `${b('Logging a request')}\nForward a message, or just type the request text → bot will ask for the requestor\n\n` +
     `${b('Commands')}\n` +
     `/pending — open requests\n` +
     `/all — all requests incl. Done\n` +
