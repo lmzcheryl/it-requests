@@ -106,7 +106,7 @@ export async function getOverdueRequests(): Promise<Request[]> {
       .from('requests')
       .select('*')
       .eq('priority', priority)
-      .not('status', 'in', '("Completed","Closed")')
+      .not('status', 'in', '("Completed","Closed","Stuck")')
       .lt('created_at', cutoff)
       .or(`reminded_at.is.null,reminded_at.lt.${cutoff}`);
     if (data) results.push(...data);
