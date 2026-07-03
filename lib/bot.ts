@@ -109,7 +109,16 @@ const PRIORITY_GUIDE: Record<string, string> = {
   Low:    'Nice to have, no hard deadline.',
 };
 
+function isWorkingHours(): boolean {
+  const tz = process.env.TIMEZONE || 'Asia/Singapore';
+  const local = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+  const day = local.getDay();  // 0=Sun … 6=Sat
+  const hour = local.getHours();
+  return day >= 1 && day <= 5 && hour >= 10 && hour < 18;
+}
+
 export async function checkReminders(): Promise<void> {
+  if (!isWorkingHours()) return;
   const overdue = await getOverdueRequests();
   for (const req of overdue) {
     await sendMessage(req.chat_id,
